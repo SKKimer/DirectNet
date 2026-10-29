@@ -1,6 +1,7 @@
-﻿using System.Collections.Concurrent;
-using DirectNet.Signaling.Models;
+﻿using DirectNet.Signaling.Models;
+using DirectNet.Signaling.Services;
 using Microsoft.AspNetCore.SignalR;
+using System.Collections.Concurrent;
 
 namespace DirectNet.Signaling.Hubs;
 
@@ -9,28 +10,20 @@ namespace DirectNet.Signaling.Hubs;
 /// </summary>
 public class SignalingHub : Hub
 {
-    // In-memory storage for active lobby sessions
-    private static readonly ConcurrentDictionary<string, LobbySession> Lobbies = new();
+    // Use lobby manager to keep list of lobby codes and host endpoints (Dependency Injection)
+    private readonly ILobbyManager _lobbyManager;
+
+    public SignalingHub(ILobbyManager lobbyManager)
+    {
+        _lobbyManager = lobbyManager;
+    }
 
     /// <summary>
     /// Creates a new matchmaking lobby and returns a unique 6-character code to the host.
     /// </summary>
     public string CreateLobby(PeerEndpointInfo hostEndpoints)
     {
-        string lobbyCode;
-
-        // Generate a unique 6-character alphanumeric code
-        do
-        {
-            string guid = Guid.NewGuid().ToString("N");     // Generate a GUID and remove hyphens
-            lobbyCode = guid[..6].ToUpper();                // Only take first 6 characters and make uppercase
-        }
-        while (Lobbies.ContainsKey(lobbyCode));             // Check for duplicate
-
-        var session = new LobbySession(lobbyCode, Context.ConnectionId, hostEndpoints);
-        Lobbies[lobbyCode] = session;
-
-        return lobbyCode;
+        return _lobbyManager.CreateLobby(hostEndpoints, Context.ConnectionId);
     }
 
     /// <summary>
@@ -38,10 +31,10 @@ public class SignalingHub : Hub
     /// </summary>
     public async Task<bool> JoinLobby(string lobbyCode, PeerEndpointInfo clientEndpoints)
     {
-        if (!Lobbies.TryRemove(lobbyCode.ToUpper(), out var session))
+        // Use the lobby manager to try and get and remove the lobby
+        if (!_lobbyManager.TryGetAndRemoveLobby(lobbyCode, out var session))
         {
-            // Lobby not found or already matched
-            return false;
+            return false;   // Return false if not found or already matched
         }
 
         // Send joining client's endpoints to the host (Using SignalR's client manager)
@@ -56,20 +49,12 @@ public class SignalingHub : Hub
     /// <summary>
     /// Removes stale lobbies hosted by the disconnected client.
     /// </summary>
-    /// <param name="exception">The exception that caused the disconnection, if any (self close == no exception).</param>
-    /// <returns>A task that represents the asynchronous disconnection operation.</returns>
     public override Task OnDisconnectedAsync(Exception? exception)
     {
-        // Look up all stale lobbies by Connection Id
-        var staleLobbies = Lobbies.Where(kvp => kvp.Value.HostConnectionId == Context.ConnectionId).ToList();
+        // Use the lobby manager to remove stale connections for a given host
+        _lobbyManager.RemoveLobbiesByHost(Context.ConnectionId);
 
-        // Loop through and remove any stale lobbies by the host
-        foreach (var (code, _) in staleLobbies)
-        {
-            Lobbies.TryRemove(code, out _);
-        }
-
-        // Let SignalR close own ressources down
+        // Let SignalR close own resources down
         return base.OnDisconnectedAsync(exception);
     }
 }
