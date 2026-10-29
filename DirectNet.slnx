@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="DirectNet.Core/DirectNet.Core.csproj" />
   <Project Path="DirectNet.Signaling/DirectNet.Signaling.csproj" />
 </Solution>
