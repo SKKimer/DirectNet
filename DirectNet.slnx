@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="DirectNet.Core/DirectNet.Core.csproj" />
+  <Project Path="DirectNet.SampleApp/DirectNet.SampleApp.csproj" Id="f0032910-4421-4ea2-b483-45bb020ce1b0" />
   <Project Path="DirectNet.Signaling.Tests/DirectNet.Signaling.Tests.csproj" />
   <Project Path="DirectNet.Signaling/DirectNet.Signaling.csproj" />
 </Solution>
